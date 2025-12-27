@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      @page {
+        size: A4;
+        margin: 18mm 14mm;
+      }
+
+      body {
+        font-family: DejaVu Sans, Arial, sans-serif;
+        font-size: 11px;
+        color: #111;
+      }
+
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .muted {
+        color: #444;
+      }
+
+      .title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+      }
+
+      .card {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 10px;
+      }
+
+      .logo {
+        width: 140px;
+        height: auto;
+        object-fit: contain;
+      }
+
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      .table th,
+      .table td {
+        border: 1px solid #ddd;
+        padding: 6px;
+        vertical-align: top;
+      }
+      .table th {
+        background: #f3f3f3;
+        text-align: left;
+        font-weight: 700;
+      }
+      .right { text-align: right; }
+
+      .section {
+        margin-top: 12px;
+      }
+      .section h2 {
+        font-size: 13px;
+        margin: 0 0 6px 0;
+      }
+
+      .terms {
+        margin: 6px 0 0 16px;
+        padding: 0;
+      }
+
+      .footer {
+        margin-top: 14px;
+        font-size: 10px;
+        color: #444;
+      }
+    </style>
+  </head>
+  <body>
+    {% block content %}{% endblock %}
+  </body>
+</html>

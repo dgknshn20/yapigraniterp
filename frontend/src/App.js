@@ -39,12 +39,20 @@ import notificationService from './features/notifications/notificationService';
 import Employees from './features/hr/Employees';
 import { setUser } from './features/auth/authSlice';
 
+const LOGIN_ENABLED = (process.env.REACT_APP_LOGIN_ENABLED || 'true').toLowerCase() !== 'false';
+
+const LoginPlaceholder = () => (
+  <div style={{ padding: 24 }}>
+    <Text fw={600}>Giriş ekranı geçici olarak kapalı.</Text>
+  </div>
+);
+
 /**
  * Protected Route Component
  * Redirects to login if user is not authenticated
  */
 const ProtectedRoute = ({ children, isAuthenticated, allowedRoles, user }) => {
-  if (!isAuthenticated) return <Login />;
+  if (!isAuthenticated) return LOGIN_ENABLED ? <Login /> : <LoginPlaceholder />;
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
     return (
       <div style={{ padding: 24 }}>
@@ -131,7 +139,7 @@ export default function App() {
 
   // If user is not authenticated, show login page
   if (!user) {
-    return <Login />;
+    return LOGIN_ENABLED ? <Login /> : <LoginPlaceholder />;
   }
   if (!user.role && roleLoading) {
     return (
@@ -262,7 +270,7 @@ export default function App() {
 
       <AppShell.Main>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={LOGIN_ENABLED ? <Login /> : <LoginPlaceholder />} />
           <Route path="/" element={<ProtectedRoute isAuthenticated={!!user} user={user}><Dashboard /></ProtectedRoute>} />
           <Route path="/customers" element={<ProtectedRoute isAuthenticated={!!user} user={user} allowedRoles={['ADMIN', 'SALES']}><Customers /></ProtectedRoute>} />
           <Route path="/customers/:id" element={<ProtectedRoute isAuthenticated={!!user} user={user} allowedRoles={['ADMIN', 'SALES']}><CustomerDetail /></ProtectedRoute>} />

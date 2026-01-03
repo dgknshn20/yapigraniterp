@@ -44,6 +44,9 @@ def env_list(name, default, alt_names=None):
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool('DJANGO_DEBUG', os.getenv('DEBUG', 'False'))
 
+# Temporary auth bypass for production smoke-testing.
+AUTH_DISABLED = env_bool('AUTH_DISABLED', 'True')
+
 ALLOWED_HOSTS = [
     "yapigraniterp-production.up.railway.app",
     ".railway.app",
@@ -181,6 +184,7 @@ AUTH_USER_MODEL = 'core.User'
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'apps.core.auth.SystemUserAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],

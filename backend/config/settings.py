@@ -22,10 +22,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-ze)@a)!ucsthnnuc1r09b__ot2-)ey^fqp#$$zjo^031q@xcpp'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-ze)@a)!ucsthnnuc1r09b__ot2-)ey^fqp#$$zjo^031q@xcpp')
+
+def env_bool(name, default='False'):
+    return os.getenv(name, default).lower() in ('1', 'true', 'yes', 'on')
+
+def env_list(name, default):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    items = [item.strip() for item in value.split(',') if item.strip()]
+    return items or default
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DJANGO_DEBUG', os.getenv('DEBUG', 'False'))
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost 127.0.0.1").split()
 
@@ -52,6 +62,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -142,6 +153,11 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'static'
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 # Media files (Upload for ImageField, FileField etc)
 MEDIA_URL = '/media/'
@@ -173,7 +189,7 @@ SIMPLE_JWT = {
 }
 
 # CORS Configuration (Frontend access)
-CORS_ALLOWED_ORIGINS = [
+DEFAULT_CORS_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://localhost:3001',
@@ -181,5 +197,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
 ]
+CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS', DEFAULT_CORS_ORIGINS)
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', DEFAULT_CORS_ORIGINS)
 
 CORS_ALLOW_CREDENTIALS = True

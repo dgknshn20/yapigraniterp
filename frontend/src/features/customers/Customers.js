@@ -36,22 +36,36 @@ const STATUS_OPTIONS = [
   { value: 'BLACKLIST', label: 'İptal / Kara Liste' },
 ];
 
+const STATUS_COLOR_OPTIONS = [
+  { value: 'BLACK', label: 'Siyah' },
+  { value: 'RED', label: 'Kırmızı' },
+  { value: 'YELLOW', label: 'Sarı' },
+  { value: 'GREEN', label: 'Yeşil' },
+];
+
+const STATUS_COLOR_LABELS = STATUS_COLOR_OPTIONS.reduce((acc, item) => {
+  acc[item.value] = item.label;
+  return acc;
+}, {});
+
 const SEGMENT_OPTIONS = [
   { value: 'STANDARD', label: 'Standart' },
   { value: 'VIP', label: 'VIP' },
   { value: 'RISKY', label: 'Riskli' },
 ];
 
-const getStatusColor = (status) => {
+const STATUS_COLOR_MAP = {
+  BLACK: 'dark',
+  RED: 'red',
+  YELLOW: 'yellow',
+  GREEN: 'green',
+};
+
+const getStatusColor = (statusColor) => {
   const map = {
-    LEAD: 'gray',
-    NEGOTIATION: 'blue',
-    ACTIVE: 'green',
-    PAYMENT_DUE: 'orange',
-    PASSIVE: 'yellow',
-    BLACKLIST: 'red',
+    ...STATUS_COLOR_MAP,
   };
-  return map[status] || 'gray';
+  return map[statusColor] || 'gray';
 };
 
 export default function Customers() {
@@ -60,7 +74,7 @@ export default function Customers() {
   const [customers, setCustomers] = useState([]);
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusColorFilter, setStatusColorFilter] = useState('');
 
   const [opened, setOpened] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -74,6 +88,7 @@ export default function Customers() {
   const [form, setForm] = useState({
     customer_type: 'INDIVIDUAL',
     status: 'LEAD',
+    status_color: 'GREEN',
     segment: 'STANDARD',
     name: '',
     phone: '',
@@ -89,11 +104,13 @@ export default function Customers() {
     return (customers || []).filter((c) => {
       const name = (c.name || '').toLowerCase();
       const phone = String(c.phone || '');
-      const matchSearch = name.includes(search.toLowerCase()) || phone.includes(search);
-      const matchStatus = statusFilter ? c.status === statusFilter : true;
+      const number = String(c.customer_number || '');
+      const term = search.toLowerCase();
+      const matchSearch = name.includes(term) || phone.includes(search) || number.includes(search);
+      const matchStatus = statusColorFilter ? c.status_color === statusColorFilter : true;
       return matchSearch && matchStatus;
     });
-  }, [customers, search, statusFilter]);
+  }, [customers, search, statusColorFilter]);
 
   useEffect(() => {
     load();
@@ -115,6 +132,7 @@ export default function Customers() {
     setForm({
       customer_type: 'INDIVIDUAL',
       status: 'LEAD',
+      status_color: 'GREEN',
       segment: 'STANDARD',
       name: '',
       phone: '',
@@ -124,6 +142,7 @@ export default function Customers() {
       address: '',
       location_url: '',
       internal_notes: '',
+      status_color: 'GREEN',
     });
     setOpened(true);
   };
@@ -133,6 +152,7 @@ export default function Customers() {
     setForm({
       customer_type: c.customer_type || 'INDIVIDUAL',
       status: c.status || 'LEAD',
+      status_color: c.status_color || 'GREEN',
       segment: c.segment || 'STANDARD',
       name: c.name || '',
       phone: c.phone || '',
@@ -142,6 +162,7 @@ export default function Customers() {
       address: c.address || '',
       location_url: c.location_url || '',
       internal_notes: c.internal_notes || '',
+      status_color: c.status_color || 'GREEN',
     });
     setOpened(true);
   };
@@ -256,10 +277,10 @@ export default function Customers() {
             style={{ flex: 1 }}
           />
           <Select
-            placeholder="Durum Filtrele"
-            data={[{ value: '', label: 'Tümü' }, ...STATUS_OPTIONS]}
-            value={statusFilter}
-            onChange={(value) => setStatusFilter(value || '')}
+            placeholder="Statü Filtrele"
+            data={[{ value: '', label: 'Tümü' }, ...STATUS_COLOR_OPTIONS]}
+            value={statusColorFilter}
+            onChange={(value) => setStatusColorFilter(value || '')}
             style={{ width: 220 }}
           />
         </Group>
@@ -271,7 +292,7 @@ export default function Customers() {
         <Table striped highlightOnHover>
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Durum</Table.Th>
+              <Table.Th>No</Table.Th>
               <Table.Th>Ad / Firma</Table.Th>
               <Table.Th>Telefon</Table.Th>
               <Table.Th>Bakiye</Table.Th>
@@ -281,11 +302,7 @@ export default function Customers() {
           <Table.Tbody>
             {filteredCustomers.map((c) => (
               <Table.Tr key={c.id} onClick={() => openDrawer(c.id)} style={{ cursor: 'pointer' }}>
-                <Table.Td>
-                  <Badge color={getStatusColor(c.status)} variant="light">
-                    {STATUS_OPTIONS.find((o) => o.value === c.status)?.label || c.status}
-                  </Badge>
-                </Table.Td>
+                <Table.Td>{c.customer_number || '-'}</Table.Td>
                 <Table.Td fw={500}>{c.name}</Table.Td>
                 <Table.Td>{c.phone}</Table.Td>
                 <Table.Td>0.00 ₺</Table.Td>
@@ -375,6 +392,12 @@ export default function Customers() {
             data={STATUS_OPTIONS}
             value={form.status}
             onChange={(value) => setForm((p) => ({ ...p, status: value }))}
+          />
+          <Select
+            label="Statü"
+            data={STATUS_COLOR_OPTIONS}
+            value={form.status_color}
+            onChange={(value) => setForm((p) => ({ ...p, status_color: value || 'GREEN' }))}
           />
           <Select
             label="Müşteri Tipi"

@@ -190,15 +190,6 @@ export default function Finance() {
     };
   }, [canAccess]);
 
-  if (!canAccess) {
-    return (
-      <Container size="xl" py="md">
-        <Title order={2}>Finans</Title>
-        <Text mt="md">Bu sayfaya erişiminiz yok.</Text>
-      </Container>
-    );
-  }
-
   const accountOptions = useMemo(
     () => accounts.map((a) => ({ value: String(a.id), label: `${a.name} (${a.currency})` })),
     [accounts]
@@ -212,7 +203,10 @@ export default function Finance() {
   );
 
   const customerOptions = useMemo(
-    () => customers.map((c) => ({ value: String(c.id), label: c.name })),
+    () => customers.map((c) => ({
+      value: String(c.id),
+      label: `${c.customer_number ? `#${c.customer_number} - ` : ''}${c.name}`,
+    })),
     [customers]
   );
 
@@ -503,6 +497,15 @@ export default function Finance() {
     rows.sort((a, b) => String(a.inst.due_date || '').localeCompare(String(b.inst.due_date || '')));
     return rows;
   }, [paymentPlans, onlyPendingInstallments]);
+
+  if (!canAccess) {
+    return (
+      <Container size="xl" py="md">
+        <Title order={2}>Finans</Title>
+        <Text mt="md">Bu sayfaya erişiminiz yok.</Text>
+      </Container>
+    );
+  }
 
   return (
     <Container size="xl" py="md">

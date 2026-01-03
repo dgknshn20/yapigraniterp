@@ -4,8 +4,8 @@ from .models import Customer, Proposal, ProposalItem, Appointment, OfferApproval
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ("name", "customer_type", "status", "segment", "owner")
-    list_filter = ("customer_type", "status", "segment")
+    list_display = ("name", "customer_type", "status", "status_color", "segment", "owner")
+    list_filter = ("customer_type", "status", "status_color", "segment")
     search_fields = ("name", "phone", "tax_number")
 
 

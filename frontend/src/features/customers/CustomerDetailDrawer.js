@@ -27,17 +27,16 @@ import { notifications } from '@mantine/notifications';
 
 import { getCustomerDetail } from './customerService';
 
-const getStatusColor = (status) => {
-  const map = {
-    LEAD: 'gray',
-    NEGOTIATION: 'blue',
-    ACTIVE: 'green',
-    PAYMENT_DUE: 'orange',
-    PASSIVE: 'yellow',
-    BLACKLIST: 'red',
-  };
-  return map[status] || 'gray';
+const STATUS_COLOR_MAP = {
+  BLACK: 'dark',
+  RED: 'red',
+  YELLOW: 'yellow',
+  GREEN: 'green',
 };
+
+const getStatusColor = (statusColor) => (
+  STATUS_COLOR_MAP[statusColor] || 'gray'
+);
 
 const getInstallmentStatusColor = (status, isOverdue) => {
   if (isOverdue) return 'red';
@@ -100,7 +99,7 @@ export default function CustomerDetailDrawer({ customerId, opened, onClose }) {
           <Paper withBorder p="md" radius="md" bg="gray.0">
             <Group justify="space-between" align="flex-start">
               <Group>
-                <ThemeIcon size={50} radius="md" variant="filled" color={getStatusColor(customer.status)}>
+                <ThemeIcon size={50} radius="md" variant="filled" color={getStatusColor(customer.status_color)}>
                   <IconUser size={30} />
                 </ThemeIcon>
                 <div>
@@ -110,15 +109,15 @@ export default function CustomerDetailDrawer({ customerId, opened, onClose }) {
                   <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
                     {customer.customer_type === 'COMPANY' ? 'Kurumsal' : 'Bireysel'}
                   </Text>
+                  <Text size="xs" c="dimmed" fw={600}>
+                    Müşteri No: {customer.customer_number || '-'}
+                  </Text>
                   <Group gap="xs" mt={6}>
                     {customer.segment_display ? (
                       <Badge size="sm" variant="light" color="blue">
                         {customer.segment_display}
                       </Badge>
                     ) : null}
-                    <Badge size="sm" color={getStatusColor(customer.status)} variant="outline">
-                      {customer.status_display || customer.status}
-                    </Badge>
                   </Group>
                 </div>
               </Group>

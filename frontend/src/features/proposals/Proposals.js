@@ -12,9 +12,10 @@ import {
   NumberInput,
   Select,
   SimpleGrid,
-  Stepper,
   Table,
+  Tabs,
   Text,
+  TextInput,
   Title,
   Textarea,
 } from '@mantine/core';
@@ -24,7 +25,6 @@ import { IconTrash, IconPlus, IconCheck } from '@tabler/icons-react';
 
 import { listProposals, createProposal, createProposalItem, finalizeProposal } from './proposalService';
 import { listCustomers } from '../customers/customerService';
-import { listProducts } from '../inventory/slabService';
 import { listContracts } from '../contracts/contractService';
 
 const STATUS_LABELS = {
@@ -51,24 +51,126 @@ const CONTRACT_STATUS_COLORS = {
   CANCELLED: 'red',
 };
 
+const DELIVERY_OPTIONS = [
+  { value: 'APPLICATION_INCLUDED', label: 'Uygulama Dahil' },
+  { value: 'FACTORY_DELIVERY', label: 'Fabrika Teslim' },
+];
+
+const UNIT_OPTIONS = [
+  { value: 'MTUL', label: 'Mtül' },
+  { value: 'M2', label: 'm²' },
+  { value: 'ADET', label: 'Adet' },
+  { value: 'TAKIM', label: 'Takım' },
+];
+
+const VAT_MULTIPLIER = 1.2;
+
+const SERVICE_DEFINITIONS = [
+  {
+    id: 'atelier_labor',
+    name: 'Atölye Eleman Maliyeti',
+    unit: 'Kişi',
+    timeUnit: 'Gün',
+    price: 3800,
+    totalFixed: false,
+    durationFixed: false,
+  },
+  {
+    id: 'atelier_overhead',
+    name: 'Atölye İşletme Maliyeti',
+    unit: 'Grup',
+    timeUnit: 'Gün',
+    price: 6350,
+    totalFixed: true,
+    totalValue: 1,
+    durationFixed: false,
+  },
+  {
+    id: 'consumables',
+    name: 'Sarf Malzeme Gideri',
+    unit: 'Grup',
+    timeUnit: 'Grup',
+    price: 0,
+    totalFixed: true,
+    totalValue: 1,
+    durationFixed: true,
+  },
+  {
+    id: 'site_labor',
+    name: 'Eleman Şantiye Montaj',
+    unit: 'Kişi',
+    timeUnit: 'Gün',
+    price: 3800,
+    totalFixed: false,
+    durationFixed: false,
+  },
+  {
+    id: 'transport',
+    name: 'Nakliye',
+    unit: 'Kez',
+    timeUnit: 'KM',
+    price: 15,
+    totalFixed: false,
+    durationFixed: false,
+  },
+];
+
+const EXTERNAL_SERVICE_OPTIONS = [
+  { value: 'OPTION_1', label: 'Seçenek 1' },
+  { value: 'OPTION_2', label: 'Seçenek 2' },
+  { value: 'OTHER', label: 'Diğer' },
+];
+
+const EXTERNAL_SERVICE_PRICES = {
+  OPTION_1: 0,
+  OPTION_2: 0,
+  OTHER: 0,
+};
+
+const EXTERNAL_UNIT_OPTIONS = [
+  { value: 'MTUL', label: 'Mtül' },
+  { value: 'M2', label: 'm²' },
+  { value: 'ADET', label: 'Adet' },
+];
+
+const createServiceInputs = () => ({
+  atelier_labor: { total: 0, duration: 0 },
+  atelier_overhead: { total: 1, duration: 0 },
+  consumables: { total: 1, duration: 1 },
+  site_labor: { total: 0, duration: 0 },
+  transport: { total: 0, duration: 0 },
+});
+
+const toNumber = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : 0;
+};
+
 export default function Proposals() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [proposals, setProposals] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [products, setProducts] = useState([]);
 
   const [opened, setOpened] = useState(false);
-  const [activeStep, setActiveStep] = useState(0);
+  const [activeTab, setActiveTab] = useState('summary');
   const [saving, setSaving] = useState(false);
 
   const [formCustomer, setFormCustomer] = useState(null);
   const [formDate, setFormDate] = useState(new Date());
   const [formCurrency, setFormCurrency] = useState('TRY');
   const [formNote, setFormNote] = useState('');
+  const [formWorkSummary, setFormWorkSummary] = useState('');
+  const [formStoneSummary, setFormStoneSummary] = useState('');
+  const [formDelivery, setFormDelivery] = useState('FACTORY_DELIVERY');
 
-  const [cartItems, setCartItems] = useState([]);
+  const [lineItems, setLineItems] = useState([]);
+  const [costTab, setCostTab] = useState('products');
+  const [productLines, setProductLines] = useState([]);
+  const [serviceInputs, setServiceInputs] = useState(() => createServiceInputs());
+  const [externalServices, setExternalServices] = useState([]);
+  const [profitMultiplier, setProfitMultiplier] = useState(1.6);
 
   const [finalizeModalOpen, setFinalizeModalOpen] = useState(false);
   const [finalizeTargetId, setFinalizeTargetId] = useState(null);
@@ -79,8 +181,36 @@ export default function Proposals() {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailProposal, setDetailProposal] = useState(null);
 
-  const emptyItem = { product: '', width: 0, length: 0, quantity: 1, unit_price: 0, fire_rate: 10, labor_cost: 0 };
-  const [currentItem, setCurrentItem] = useState(emptyItem);
+  const createEmptyItem = () => ({
+    tempId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    work: '',
+    stone: '',
+    size: '',
+    total: 0,
+    unit: 'M2',
+    quantity: 1,
+    unit_price: 0,
+  });
+
+  const createEmptyProductLine = () => ({
+    tempId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    category: '',
+    brand: '',
+    color: '',
+    totalMeasure: 0,
+    unitMeasure: 0,
+    plateCount: 0,
+    stoneFee: 0,
+  });
+
+  const createEmptyExternalService = () => ({
+    tempId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    service: null,
+    quantity: 1,
+    unit: 'M2',
+    unitPrice: 0,
+    duration: 0,
+  });
 
   useEffect(() => {
     loadData();
@@ -89,15 +219,13 @@ export default function Proposals() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [pData, cData, prodData, contractData] = await Promise.all([
+      const [pData, cData, contractData] = await Promise.all([
         listProposals(),
         listCustomers(),
-        listProducts(),
         listContracts(),
       ]);
       setProposals(pData);
       setCustomers(cData);
-      setProducts(prodData);
       setContracts(Array.isArray(contractData) ? contractData : []);
     } catch (e) {
       notifications.show({ title: 'Hata', message: 'Veriler yüklenemedi', color: 'red' });
@@ -106,23 +234,141 @@ export default function Proposals() {
     }
   };
 
-  const customerOptions = useMemo(() => customers.map((c) => ({ value: String(c.id), label: c.name })), [customers]);
-  const productOptions = useMemo(() => products.map((p) => ({ value: String(p.id), label: p.name })), [products]);
+  const customerOptions = useMemo(
+    () => customers.map((c) => ({
+      value: String(c.id),
+      label: `${c.customer_number ? `#${c.customer_number} - ` : ''}${c.name}`,
+    })),
+    [customers]
+  );
+
+  const nextProposalNo = useMemo(() => {
+    const nums = (proposals || [])
+      .map((p) => Number(p.proposal_number))
+      .filter((n) => Number.isFinite(n));
+    if (nums.length === 0) return 1;
+    return Math.max(...nums) + 1;
+  }, [proposals]);
 
   const calculateItemTotal = (item) => {
-    const area = (item.width * item.length * item.quantity) / 10000;
-    const wasteMult = 1 + (item.fire_rate / 100);
-    const matCost = area * item.unit_price * wasteMult;
-    return matCost + item.labor_cost;
+    const total = Number(item.total || 0);
+    const qty = Number(item.quantity || 0);
+    const price = Number(item.unit_price || 0);
+    return total * qty * price;
   };
 
-  const cartTotal = useMemo(() => cartItems.reduce((acc, item) => acc + calculateItemTotal(item), 0), [cartItems]);
+  const cartTotal = useMemo(
+    () => lineItems.reduce((acc, item) => acc + calculateItemTotal(item), 0),
+    [lineItems]
+  );
 
   const formatCurrency = (value, currency) => {
     const amount = Number(value || 0);
     if (!Number.isFinite(amount)) return value;
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency }).format(amount);
   };
+
+  const costCurrency = formCurrency || 'TRY';
+
+  const calculateProductActual = (line) => toNumber(line.stoneFee) * toNumber(line.plateCount);
+  const calculateProductVat = (line) => calculateProductActual(line) * VAT_MULTIPLIER;
+
+  const productTotals = useMemo(
+    () => productLines.reduce(
+      (acc, line) => {
+        const actual = calculateProductActual(line);
+        acc.actual += actual;
+        acc.vat += actual * VAT_MULTIPLIER;
+        return acc;
+      },
+      { actual: 0, vat: 0 }
+    ),
+    [productLines]
+  );
+
+  const serviceCosts = useMemo(() => {
+    const getInput = (id) => serviceInputs[id] || { total: 0, duration: 0 };
+
+    const calcCost = (id, price, totalOverride = null) => {
+      const input = getInput(id);
+      const total = totalOverride !== null ? totalOverride : toNumber(input.total);
+      const duration = toNumber(input.duration);
+      return price * total * duration;
+    };
+
+    const laborActual = calcCost('atelier_labor', 3800);
+    const overheadActual = calcCost('atelier_overhead', 6350, 1);
+    const siteActual = calcCost('site_labor', 3800);
+    const transportActual = calcCost('transport', 15);
+    const sarfActual = (laborActual + overheadActual + siteActual + transportActual) * 0.05;
+
+    const transportVat = transportActual * VAT_MULTIPLIER;
+    const sarfVat = sarfActual * VAT_MULTIPLIER;
+
+    const rows = {
+      atelier_labor: { actual: laborActual, vat: laborActual, unitPrice: 3800 },
+      atelier_overhead: { actual: overheadActual, vat: overheadActual, unitPrice: 6350 },
+      site_labor: { actual: siteActual, vat: siteActual, unitPrice: 3800 },
+      transport: { actual: transportActual, vat: transportVat, unitPrice: 15 },
+      consumables: { actual: sarfActual, vat: sarfVat, unitPrice: sarfActual },
+    };
+
+    const baseActualTotal = laborActual + overheadActual + siteActual + transportActual;
+    const baseVatTotal = laborActual + overheadActual + siteActual + transportVat;
+
+    return {
+      rows,
+      baseActualTotal,
+      baseVatTotal,
+      sarfActual,
+      sarfVat,
+      actualTotal: baseActualTotal + sarfActual,
+      vatTotal: baseVatTotal + sarfVat,
+    };
+  }, [serviceInputs]);
+
+  const calculateExternalActual = (line) => {
+    const qty = toNumber(line.quantity);
+    const unitPrice = toNumber(line.unitPrice);
+    const duration = toNumber(line.duration);
+    const multiplier = duration > 0 ? duration : 1;
+    return qty * unitPrice * multiplier;
+  };
+
+  const externalTotals = useMemo(
+    () => externalServices.reduce(
+      (acc, line) => {
+        const actual = calculateExternalActual(line);
+        acc.actual += actual;
+        acc.vat += actual * VAT_MULTIPLIER;
+        return acc;
+      },
+      { actual: 0, vat: 0 }
+    ),
+    [externalServices]
+  );
+
+  const summaryTotals = useMemo(() => {
+    const generalCost = productTotals.actual
+      + serviceCosts.baseActualTotal
+      + serviceCosts.sarfActual
+      + externalTotals.actual;
+    const vatCost = productTotals.vat
+      + serviceCosts.baseVatTotal
+      + serviceCosts.sarfVat
+      + externalTotals.vat;
+    const profitFactor = toNumber(profitMultiplier);
+    const profitTotal = generalCost * profitFactor;
+    const finalTotal = profitTotal * VAT_MULTIPLIER;
+
+    return {
+      generalCost,
+      vatCost,
+      profitFactor,
+      profitTotal,
+      finalTotal,
+    };
+  }, [externalTotals, productTotals, profitMultiplier, serviceCosts]);
 
   const contractMap = useMemo(() => {
     const map = new Map();
@@ -141,6 +387,9 @@ export default function Proposals() {
   const detailContractStatusColor = detailContract
     ? (CONTRACT_STATUS_COLORS[detailContract.status] || 'gray')
     : 'gray';
+  const detailDeliveryLabel = detailProposal
+    ? (DELIVERY_OPTIONS.find((opt) => opt.value === detailProposal.delivery_type)?.label || null)
+    : null;
 
   const openDetail = (proposal) => {
     setDetailProposal(proposal);
@@ -152,24 +401,92 @@ export default function Proposals() {
     setDetailProposal(null);
   };
 
-  const addItemToCart = () => {
-    if (!currentItem.product || currentItem.width <= 0 || currentItem.length <= 0) {
-      notifications.show({ message: 'Lütfen geçerli ölçü ve ürün seçin.', color: 'yellow' });
-      return;
-    }
-    const prodName = products.find((p) => String(p.id) === currentItem.product)?.name;
-    setCartItems([...cartItems, { ...currentItem, tempId: Date.now(), productName: prodName }]);
-    setCurrentItem(emptyItem);
+  const openCreate = () => {
+    setFormCustomer(null);
+    setFormDate(new Date());
+    setFormCurrency('TRY');
+    setFormNote('');
+    setFormWorkSummary('');
+    setFormStoneSummary('');
+    setFormDelivery('FACTORY_DELIVERY');
+    setLineItems([createEmptyItem()]);
+    setProductLines([createEmptyProductLine()]);
+    setServiceInputs(createServiceInputs());
+    setExternalServices([createEmptyExternalService()]);
+    setProfitMultiplier(1.6);
+    setCostTab('products');
+    setActiveTab('summary');
+    setOpened(true);
   };
 
-  const removeItemFromCart = (tempId) => {
-    setCartItems(cartItems.filter((i) => i.tempId !== tempId));
+  const addLineItem = () => {
+    setLineItems((prev) => [...prev, createEmptyItem()]);
+  };
+
+  const updateLineItem = (tempId, patch) => {
+    setLineItems((prev) => prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item)));
+  };
+
+  const removeLineItem = (tempId) => {
+    setLineItems((prev) => prev.filter((item) => item.tempId !== tempId));
+  };
+
+  const addProductLine = () => {
+    setProductLines((prev) => [...prev, createEmptyProductLine()]);
+  };
+
+  const updateProductLine = (tempId, patch) => {
+    setProductLines((prev) => prev.map((line) => (line.tempId === tempId ? { ...line, ...patch } : line)));
+  };
+
+  const removeProductLine = (tempId) => {
+    setProductLines((prev) => prev.filter((line) => line.tempId !== tempId));
+  };
+
+  const updateServiceInput = (id, patch) => {
+    setServiceInputs((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] || { total: 0, duration: 0 }), ...patch },
+    }));
+  };
+
+  const addExternalService = () => {
+    setExternalServices((prev) => [...prev, createEmptyExternalService()]);
+  };
+
+  const updateExternalService = (tempId, patch) => {
+    setExternalServices((prev) => prev.map((line) => (line.tempId === tempId ? { ...line, ...patch } : line)));
+  };
+
+  const updateExternalServiceName = (tempId, service) => {
+    const unitPrice = service ? (EXTERNAL_SERVICE_PRICES[service] ?? 0) : 0;
+    updateExternalService(tempId, { service, unitPrice });
+  };
+
+  const removeExternalService = (tempId) => {
+    setExternalServices((prev) => prev.filter((line) => line.tempId !== tempId));
   };
 
   const handleSaveProposal = async () => {
     if (!formCustomer) return;
     if (!formDate) {
       notifications.show({ message: 'Geçerlilik tarihi seçin.', color: 'yellow' });
+      return;
+    }
+    if (lineItems.length === 0) {
+      notifications.show({ message: 'En az bir iş kalemi ekleyin.', color: 'yellow' });
+      return;
+    }
+    const invalidItem = lineItems.find((item) => (
+      !item.work.trim()
+      || !item.stone.trim()
+      || !item.unit
+      || Number(item.total || 0) <= 0
+      || Number(item.quantity || 0) <= 0
+      || Number(item.unit_price || 0) <= 0
+    ));
+    if (invalidItem) {
+      notifications.show({ message: 'Lütfen tüm kalemlerde gerekli alanları doldurun.', color: 'yellow' });
       return;
     }
     setSaving(true);
@@ -179,20 +496,22 @@ export default function Proposals() {
         valid_until: formDate.toISOString().split('T')[0],
         currency: formCurrency,
         description: formNote,
+        work_summary: formWorkSummary,
+        stone_summary: formStoneSummary,
+        delivery_type: formDelivery,
       };
       const newProposal = await createProposal(proposalData);
 
-      const itemPromises = cartItems.map((item) => {
+      const itemPromises = lineItems.map((item) => {
         return createProposalItem({
           proposal: newProposal.id,
-          product: Number(item.product),
-          width: item.width,
-          length: item.length,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          fire_rate: item.fire_rate,
-          labor_cost: item.labor_cost,
-          description: 'Standart Üretim',
+          description: item.work,
+          stone_type: item.stone,
+          size_text: item.size,
+          total_measure: Number(item.total || 0),
+          total_unit: item.unit,
+          quantity: Number(item.quantity || 0),
+          unit_price: Number(item.unit_price || 0),
         });
       });
 
@@ -202,10 +521,18 @@ export default function Proposals() {
       setOpened(false);
       await loadData();
       setFormCustomer(null);
-      setCartItems([]);
-      setActiveStep(0);
+      setLineItems([createEmptyItem()]);
+      setProductLines([createEmptyProductLine()]);
+      setServiceInputs(createServiceInputs());
+      setExternalServices([createEmptyExternalService()]);
+      setProfitMultiplier(1.6);
+      setCostTab('products');
+      setActiveTab('summary');
       setFormCurrency('TRY');
       setFormNote('');
+      setFormWorkSummary('');
+      setFormStoneSummary('');
+      setFormDelivery('FACTORY_DELIVERY');
     } catch (e) {
       notifications.show({ title: 'Hata', message: 'Teklif kaydedilemedi.', color: 'red' });
     } finally {
@@ -246,7 +573,7 @@ export default function Proposals() {
     <Container size="xl" py="md">
       <Group justify="space-between" mb="md">
         <Title order={2}>Teklif Yönetimi</Title>
-        <Button onClick={() => setOpened(true)} leftSection={<IconPlus size={18} />}>Yeni Teklif</Button>
+        <Button onClick={openCreate} leftSection={<IconPlus size={18} />}>Yeni Teklif</Button>
       </Group>
 
       {loading ? (
@@ -256,6 +583,7 @@ export default function Proposals() {
           {proposals.map((p) => {
             const contract = contractMap.get(p.id);
             const contractLabel = contract ? (CONTRACT_STATUS_LABELS[contract.status] || contract.status) : null;
+            const deliveryLabel = DELIVERY_OPTIONS.find((opt) => opt.value === p.delivery_type)?.label;
             return (
               <Card key={p.id} withBorder shadow="sm" radius="md" style={{ cursor: 'pointer' }} onClick={() => openDetail(p)}>
                 <Group justify="space-between" align="flex-start">
@@ -264,6 +592,11 @@ export default function Proposals() {
                     <Text size="sm" c="dimmed">
                       {p.proposal_number} • {STATUS_LABELS[p.status] || p.status}
                     </Text>
+                    {(p.work_summary || p.stone_summary || deliveryLabel) && (
+                      <Text size="sm" c="dimmed">
+                        {[p.work_summary, p.stone_summary, deliveryLabel].filter(Boolean).join(' • ')}
+                      </Text>
+                    )}
                     <Group gap="xs" mt="xs">
                       <Badge variant="light">{p.currency}</Badge>
                       {p.valid_until && <Badge variant="light" color="gray">{p.valid_until}</Badge>}
@@ -303,10 +636,29 @@ export default function Proposals() {
         </SimpleGrid>
       )}
 
-      <Modal opened={opened} onClose={() => setOpened(false)} title="Yeni Teklif Oluştur" size="lg" centered>
-        <Stepper active={activeStep} onStepClick={setActiveStep}>
-          <Stepper.Step label="Müşteri & Genel" description="Kime teklif veriyoruz?">
-            <SimpleGrid cols={1} mt="md">
+      <Modal
+        opened={opened}
+        onClose={() => setOpened(false)}
+        title="Yeni Teklif Oluştur"
+        size="90%"
+        padding="lg"
+        radius="md"
+        centered
+      >
+        <Tabs value={activeTab} onChange={(v) => setActiveTab(v || 'summary')}>
+          <Tabs.List mb="md">
+            <Tabs.Tab value="summary">Özet</Tabs.Tab>
+            <Tabs.Tab value="detail" disabled={!formCustomer}>Detay</Tabs.Tab>
+            <Tabs.Tab value="cost" disabled={!formCustomer}>Maliyet</Tabs.Tab>
+          </Tabs.List>
+
+          <Tabs.Panel value="summary" pt="md">
+            <SimpleGrid cols={2} spacing="lg" breakpoints={[{ maxWidth: 'sm', cols: 1 }]}>
+              <TextInput
+                label="Teklif No"
+                value={nextProposalNo ? String(nextProposalNo) : ''}
+                readOnly
+              />
               <Select
                 label="Müşteri Seç"
                 data={customerOptions}
@@ -315,139 +667,489 @@ export default function Proposals() {
                 searchable
                 required
               />
-              <Group grow>
-                <Select
-                  label="Para Birimi"
-                  data={['TRY', 'USD', 'EUR']}
-                  value={formCurrency}
-                  onChange={setFormCurrency}
-                />
-                <DateInput
-                  label="Geçerlilik Tarihi"
-                  value={formDate}
-                  onChange={setFormDate}
-                />
-              </Group>
-              <Textarea
-                label="Notlar"
-                value={formNote}
-                onChange={(e) => setFormNote(e.target.value)}
+              <TextInput
+                label="Yapılacak İş"
+                value={formWorkSummary}
+                onChange={(e) => setFormWorkSummary(e.target.value)}
+              />
+              <TextInput
+                label="Taş Cinsi"
+                value={formStoneSummary}
+                onChange={(e) => setFormStoneSummary(e.target.value)}
+              />
+              <Select
+                label="Teslimat"
+                data={DELIVERY_OPTIONS}
+                value={formDelivery}
+                onChange={(v) => setFormDelivery(v || 'FACTORY_DELIVERY')}
+              />
+              <Select
+                label="Para Birimi"
+                data={['TRY', 'USD', 'EUR']}
+                value={formCurrency}
+                onChange={setFormCurrency}
+              />
+              <DateInput
+                label="Geçerlilik Tarihi"
+                value={formDate}
+                onChange={setFormDate}
               />
             </SimpleGrid>
+            <Textarea
+              mt="lg"
+              label="Notlar"
+              value={formNote}
+              onChange={(e) => setFormNote(e.target.value)}
+            />
             <Group justify="flex-end" mt="xl">
-              <Button onClick={() => setActiveStep(1)} disabled={!formCustomer}>İleri</Button>
+              <Button onClick={() => setActiveTab('detail')} disabled={!formCustomer}>
+                Detaya Geç
+              </Button>
             </Group>
-          </Stepper.Step>
+          </Tabs.Panel>
 
-          <Stepper.Step label="Ürünler" description="Taş ve ölçü girişi">
-            <Card withBorder p="sm" mt="sm" radius="md">
-              <Text size="sm" fw={600} mb="xs">Yeni Kalem Ekle</Text>
-              <SimpleGrid cols={2} breakpoints={[{ maxWidth: 'sm', cols: 1 }]}> 
-                <Select
-                  label="Taş cinsi"
-                  placeholder="Taş Seçiniz"
-                  data={productOptions}
-                  searchable
-                  value={currentItem.product}
-                  onChange={(v) => setCurrentItem({ ...currentItem, product: v })}
-                />
-                <Group grow>
-                  <NumberInput
-                    label="En (cm)"
-                    placeholder="0"
-                    value={currentItem.width}
-                    onChange={(v) => setCurrentItem({ ...currentItem, width: Number(v) })}
-                    min={0}
-                    precision={2}
-                  />
-                  <NumberInput
-                    label="Boy (cm)"
-                    placeholder="0"
-                    value={currentItem.length}
-                    onChange={(v) => setCurrentItem({ ...currentItem, length: Number(v) })}
-                    min={0}
-                    precision={2}
-                  />
-                </Group>
-                <Group grow>
-                  <NumberInput
-                    label="Adet"
-                    placeholder="1"
-                    value={currentItem.quantity}
-                    onChange={(v) => setCurrentItem({ ...currentItem, quantity: Number(v) })}
-                    min={1}
-                  />
-                  <NumberInput
-                    label="Birim Fiyat (₺)"
-                    placeholder="0"
-                    value={currentItem.unit_price}
-                    onChange={(v) => setCurrentItem({ ...currentItem, unit_price: Number(v) })}
-                    min={0}
-                    precision={2}
-                  />
-                </Group>
-                <Group grow>
-                  <NumberInput
-                    label="Fire (%)"
-                    placeholder="0"
-                    value={currentItem.fire_rate}
-                    onChange={(v) => setCurrentItem({ ...currentItem, fire_rate: Number(v) })}
-                    min={0}
-                    max={100}
-                  />
-                  <NumberInput
-                    label="İşçilik (₺)"
-                    placeholder="0"
-                    value={currentItem.labor_cost}
-                    onChange={(v) => setCurrentItem({ ...currentItem, labor_cost: Number(v) })}
-                    min={0}
-                    precision={2}
-                  />
-                </Group>
-              </SimpleGrid>
-              <Button fullWidth mt="sm" variant="outline" onClick={addItemToCart}>Listeye Ekle</Button>
-            </Card>
+          <Tabs.Panel value="detail" pt="md">
+            <Group justify="space-between" mb="xs">
+              <Text size="sm" fw={600}>Teklif Kalemleri</Text>
+              <Button variant="outline" onClick={addLineItem} leftSection={<IconPlus size={16} />}>
+                Yeni Kalem
+              </Button>
+            </Group>
 
-            <Table mt="md" striped highlightOnHover>
+            <Table striped highlightOnHover withTableBorder verticalSpacing="md" horizontalSpacing="md">
               <thead>
                 <tr>
-                  <th>Ürün</th>
-                  <th>Ölçü</th>
-                  <th>Adet</th>
-                  <th>Tutar (Tahmini)</th>
+                  <th>Yapılacak İş</th>
+                  <th>Taş Cinsi</th>
+                  <th>Ebat</th>
+                  <th>Toplam</th>
+                  <th>Birim</th>
+                  <th>Miktar</th>
+                  <th>Birim</th>
+                  <th>Fiyat</th>
+                  <th>Tutar</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {cartItems.map((item) => (
-                  <tr key={item.tempId}>
-                    <td>{item.productName}</td>
-                    <td>{item.width}x{item.length}</td>
-                    <td>{item.quantity}</td>
-                    <td>{new Intl.NumberFormat('tr-TR', { style: 'currency', currency: formCurrency }).format(calculateItemTotal(item))}</td>
-                    <td>
-                      <ActionIcon color="red" onClick={() => removeItemFromCart(item.tempId)}>
-                        <IconTrash size={16} />
-                      </ActionIcon>
+                {lineItems.length === 0 ? (
+                  <tr>
+                    <td colSpan={10}>
+                      <Text size="sm" c="dimmed">Henüz kalem eklenmedi.</Text>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  lineItems.map((item) => (
+                    <tr key={item.tempId}>
+                      <td>
+                        <TextInput
+                          value={item.work}
+                          onChange={(e) => updateLineItem(item.tempId, { work: e.target.value })}
+                          placeholder="Yapılacak iş"
+                        />
+                      </td>
+                      <td>
+                        <TextInput
+                          value={item.stone}
+                          onChange={(e) => updateLineItem(item.tempId, { stone: e.target.value })}
+                          placeholder="Taş cinsi"
+                        />
+                      </td>
+                      <td>
+                        <TextInput
+                          value={item.size}
+                          onChange={(e) => updateLineItem(item.tempId, { size: e.target.value })}
+                          placeholder="Ebat"
+                        />
+                      </td>
+                      <td>
+                        <NumberInput
+                          value={item.total}
+                          onChange={(v) => updateLineItem(item.tempId, { total: typeof v === 'number' ? v : 0 })}
+                          min={0}
+                          precision={2}
+                        />
+                      </td>
+                      <td>
+                        <Select
+                          data={UNIT_OPTIONS}
+                          value={item.unit}
+                          onChange={(v) => updateLineItem(item.tempId, { unit: v || '' })}
+                          placeholder="Birim"
+                        />
+                      </td>
+                      <td>
+                        <NumberInput
+                          value={item.quantity}
+                          onChange={(v) => updateLineItem(item.tempId, { quantity: typeof v === 'number' ? v : 0 })}
+                          min={0}
+                        />
+                      </td>
+                      <td>
+                        <Text size="sm">Adet</Text>
+                      </td>
+                      <td>
+                        <NumberInput
+                          value={item.unit_price}
+                          onChange={(v) => updateLineItem(item.tempId, { unit_price: typeof v === 'number' ? v : 0 })}
+                          min={0}
+                          precision={2}
+                        />
+                      </td>
+                      <td>
+                        <Text size="sm">
+                          {formatCurrency(calculateItemTotal(item), formCurrency)}
+                        </Text>
+                      </td>
+                      <td>
+                        <ActionIcon color="red" onClick={() => removeLineItem(item.tempId)}>
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </Table>
 
             <Group justify="space-between" mt="xl">
               <Text size="lg" fw={700}>
-                Toplam: {new Intl.NumberFormat('tr-TR', { style: 'currency', currency: formCurrency }).format(cartTotal)}
+                Toplam: {formatCurrency(cartTotal, formCurrency)}
               </Text>
               <Group>
-                <Button variant="default" onClick={() => setActiveStep(0)}>Geri</Button>
-                <Button onClick={handleSaveProposal} loading={saving} disabled={cartItems.length === 0}>Teklifi Kaydet</Button>
+                <Button variant="default" onClick={() => setActiveTab('summary')}>Geri</Button>
+                <Button onClick={handleSaveProposal} loading={saving} disabled={lineItems.length === 0}>
+                  Teklifi Kaydet
+                </Button>
               </Group>
             </Group>
-          </Stepper.Step>
+          </Tabs.Panel>
 
-          <Stepper.Step label="Tamamlandı" description="Özet" />
-        </Stepper>
+          <Tabs.Panel value="cost" pt="md">
+            <Tabs value={costTab} onChange={(v) => setCostTab(v || 'products')}>
+              <Tabs.List mb="md">
+                <Tabs.Tab value="products">Ürün</Tabs.Tab>
+                <Tabs.Tab value="services">Hizmet</Tabs.Tab>
+                <Tabs.Tab value="external">Dış Hizmet</Tabs.Tab>
+              </Tabs.List>
+
+              <Tabs.Panel value="products" pt="md">
+                <Group justify="space-between" mb="xs">
+                  <Text size="sm" fw={600}>Ürün Kalemleri</Text>
+                  <Button variant="outline" onClick={addProductLine} leftSection={<IconPlus size={16} />}>
+                    Ürün Ekle
+                  </Button>
+                </Group>
+
+                <Table striped highlightOnHover withTableBorder verticalSpacing="md" horizontalSpacing="md">
+                  <thead>
+                    <tr>
+                      <th>Kategori</th>
+                      <th>Marka</th>
+                      <th>Renk</th>
+                      <th>Toplam Ölçü (m²)</th>
+                      <th>Birim (m²)</th>
+                      <th>Plaka Adet</th>
+                      <th>Taş Ücreti</th>
+                      <th>Gerçek Maliyet</th>
+                      <th>KDV&apos;li</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {productLines.length === 0 ? (
+                      <tr>
+                        <td colSpan={10}>
+                          <Text size="sm" c="dimmed">Henüz ürün eklenmedi.</Text>
+                        </td>
+                      </tr>
+                    ) : (
+                      productLines.map((line) => {
+                        const actual = calculateProductActual(line);
+                        const vat = calculateProductVat(line);
+                        return (
+                          <tr key={line.tempId}>
+                            <td>
+                              <TextInput
+                                value={line.category}
+                                onChange={(e) => updateProductLine(line.tempId, { category: e.target.value })}
+                                placeholder="Kategori"
+                              />
+                            </td>
+                            <td>
+                              <TextInput
+                                value={line.brand}
+                                onChange={(e) => updateProductLine(line.tempId, { brand: e.target.value })}
+                                placeholder="Marka"
+                              />
+                            </td>
+                            <td>
+                              <TextInput
+                                value={line.color}
+                                onChange={(e) => updateProductLine(line.tempId, { color: e.target.value })}
+                                placeholder="Renk"
+                              />
+                            </td>
+                            <td>
+                              <NumberInput
+                                value={line.totalMeasure}
+                                onChange={(v) => updateProductLine(line.tempId, { totalMeasure: typeof v === 'number' ? v : 0 })}
+                                min={0}
+                                precision={2}
+                              />
+                            </td>
+                            <td>
+                              <NumberInput
+                                value={line.unitMeasure}
+                                onChange={(v) => updateProductLine(line.tempId, { unitMeasure: typeof v === 'number' ? v : 0 })}
+                                min={0}
+                                precision={2}
+                              />
+                            </td>
+                            <td>
+                              <NumberInput
+                                value={line.plateCount}
+                                onChange={(v) => updateProductLine(line.tempId, { plateCount: typeof v === 'number' ? v : 0 })}
+                                min={0}
+                              />
+                            </td>
+                            <td>
+                              <NumberInput
+                                value={line.stoneFee}
+                                onChange={(v) => updateProductLine(line.tempId, { stoneFee: typeof v === 'number' ? v : 0 })}
+                                min={0}
+                                precision={2}
+                              />
+                            </td>
+                            <td>
+                              <Text size="sm">{formatCurrency(actual, costCurrency)}</Text>
+                            </td>
+                            <td>
+                              <Text size="sm">{formatCurrency(vat, costCurrency)}</Text>
+                            </td>
+                            <td>
+                              <ActionIcon color="red" onClick={() => removeProductLine(line.tempId)}>
+                                <IconTrash size={16} />
+                              </ActionIcon>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </Table>
+
+                <Group justify="space-between" mt="md">
+                  <Text size="sm" fw={600}>
+                    Ürün Toplam Gerçek Maliyet: {formatCurrency(productTotals.actual, costCurrency)}
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    Ürün Toplam KDV&apos;li: {formatCurrency(productTotals.vat, costCurrency)}
+                  </Text>
+                </Group>
+              </Tabs.Panel>
+
+              <Tabs.Panel value="services" pt="md">
+                <Text size="sm" fw={600} mb="xs">Hizmetler</Text>
+                <Table striped highlightOnHover withTableBorder verticalSpacing="md" horizontalSpacing="md">
+                  <thead>
+                    <tr>
+                      <th>Hizmet Adı</th>
+                      <th>Toplam Ölçü</th>
+                      <th>Birim</th>
+                      <th>Süre</th>
+                      <th>Süre Birimi</th>
+                      <th>Alış Fiyatı</th>
+                      <th>Gerçek Maliyet</th>
+                      <th>KDV&apos;li</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {SERVICE_DEFINITIONS.map((service) => {
+                      const input = serviceInputs[service.id] || { total: 0, duration: 0 };
+                      const totalValue = service.totalFixed ? service.totalValue : toNumber(input.total);
+                      const durationValue = service.durationFixed ? 1 : toNumber(input.duration);
+                      const row = serviceCosts.rows[service.id] || { actual: 0, vat: 0, unitPrice: service.price || 0 };
+                      return (
+                        <tr key={service.id}>
+                          <td>
+                            <Text size="sm">{service.name}</Text>
+                          </td>
+                          <td>
+                            <NumberInput
+                              value={totalValue}
+                              onChange={(v) => updateServiceInput(service.id, { total: typeof v === 'number' ? v : 0 })}
+                              min={0}
+                              precision={2}
+                              disabled={service.totalFixed}
+                            />
+                          </td>
+                          <td>
+                            <Text size="sm">{service.unit}</Text>
+                          </td>
+                          <td>
+                            <NumberInput
+                              value={durationValue}
+                              onChange={(v) => updateServiceInput(service.id, { duration: typeof v === 'number' ? v : 0 })}
+                              min={0}
+                              precision={2}
+                              disabled={service.durationFixed}
+                            />
+                          </td>
+                          <td>
+                            <Text size="sm">{service.timeUnit}</Text>
+                          </td>
+                          <td>
+                            <Text size="sm">{formatCurrency(row.unitPrice, costCurrency)}</Text>
+                          </td>
+                          <td>
+                            <Text size="sm">{formatCurrency(row.actual, costCurrency)}</Text>
+                          </td>
+                          <td>
+                            <Text size="sm">{formatCurrency(row.vat, costCurrency)}</Text>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+
+                <Group justify="space-between" mt="md">
+                  <Text size="sm" fw={600}>
+                    Hizmet Toplam Gerçek Maliyet: {formatCurrency(serviceCosts.actualTotal, costCurrency)}
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    Hizmet Toplam KDV&apos;li: {formatCurrency(serviceCosts.vatTotal, costCurrency)}
+                  </Text>
+                </Group>
+              </Tabs.Panel>
+
+              <Tabs.Panel value="external" pt="md">
+                <Group justify="space-between" mb="xs">
+                  <Text size="sm" fw={600}>Dış Hizmetler</Text>
+                  <Button variant="outline" onClick={addExternalService} leftSection={<IconPlus size={16} />}>
+                    Dış Hizmet Ekle
+                  </Button>
+                </Group>
+
+                <Table striped highlightOnHover withTableBorder verticalSpacing="md" horizontalSpacing="md">
+                  <thead>
+                    <tr>
+                      <th>Hizmet Adı</th>
+                      <th>Miktar</th>
+                      <th>Birim</th>
+                      <th>Birim Fiyat</th>
+                      <th>Süre</th>
+                      <th>Gerçek Maliyet</th>
+                      <th>KDV&apos;li</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {externalServices.length === 0 ? (
+                      <tr>
+                        <td colSpan={8}>
+                          <Text size="sm" c="dimmed">Henüz dış hizmet eklenmedi.</Text>
+                        </td>
+                      </tr>
+                    ) : (
+                      externalServices.map((line) => {
+                        const actual = calculateExternalActual(line);
+                        return (
+                          <tr key={line.tempId}>
+                            <td>
+                              <Select
+                                data={EXTERNAL_SERVICE_OPTIONS}
+                                value={line.service}
+                                onChange={(v) => updateExternalServiceName(line.tempId, v)}
+                                placeholder="Seçin"
+                              />
+                            </td>
+                            <td>
+                              <NumberInput
+                                value={line.quantity}
+                                onChange={(v) => updateExternalService(line.tempId, { quantity: typeof v === 'number' ? v : 0 })}
+                                min={0}
+                              />
+                            </td>
+                            <td>
+                              <Select
+                                data={EXTERNAL_UNIT_OPTIONS}
+                                value={line.unit}
+                                onChange={(v) => updateExternalService(line.tempId, { unit: v || 'M2' })}
+                              />
+                            </td>
+                            <td>
+                              <NumberInput
+                                value={line.unitPrice}
+                                onChange={(v) => updateExternalService(line.tempId, { unitPrice: typeof v === 'number' ? v : 0 })}
+                                min={0}
+                                precision={2}
+                              />
+                            </td>
+                            <td>
+                              <NumberInput
+                                value={line.duration}
+                                onChange={(v) => updateExternalService(line.tempId, { duration: typeof v === 'number' ? v : 0 })}
+                                min={0}
+                                precision={2}
+                              />
+                            </td>
+                            <td>
+                              <Text size="sm">{formatCurrency(actual, costCurrency)}</Text>
+                            </td>
+                            <td>
+                              <Text size="sm">{formatCurrency(actual * VAT_MULTIPLIER, costCurrency)}</Text>
+                            </td>
+                            <td>
+                              <ActionIcon color="red" onClick={() => removeExternalService(line.tempId)}>
+                                <IconTrash size={16} />
+                              </ActionIcon>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </Table>
+
+                <Group justify="space-between" mt="md">
+                  <Text size="sm" fw={600}>
+                    Dış Hizmet Toplam Gerçek Maliyet: {formatCurrency(externalTotals.actual, costCurrency)}
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    Dış Hizmet Toplam KDV&apos;li: {formatCurrency(externalTotals.vat, costCurrency)}
+                  </Text>
+                </Group>
+              </Tabs.Panel>
+            </Tabs>
+
+            <Card withBorder padding="md" radius="md" mt="lg">
+              <Text size="sm" fw={600} mb="xs">Özet</Text>
+              <SimpleGrid cols={2} spacing="xs" breakpoints={[{ maxWidth: 'sm', cols: 1 }]}>
+                <Text size="sm" c="dimmed">Genel Maliyet (KDV&apos;siz)</Text>
+                <Text size="sm" fw={600}>{formatCurrency(summaryTotals.generalCost, costCurrency)}</Text>
+
+                <Text size="sm" c="dimmed">KDV&apos;li Maliyet</Text>
+                <Text size="sm" fw={600}>{formatCurrency(summaryTotals.vatCost, costCurrency)}</Text>
+
+                <Text size="sm" c="dimmed">Kar Katsayısı</Text>
+                <NumberInput
+                  value={profitMultiplier}
+                  onChange={(v) => setProfitMultiplier(typeof v === 'number' ? v : 1.6)}
+                  min={0}
+                  precision={2}
+                />
+
+                <Text size="sm" c="dimmed">Karlı Toplam (KDV&apos;siz)</Text>
+                <Text size="sm" fw={600}>{formatCurrency(summaryTotals.profitTotal, costCurrency)}</Text>
+
+                <Text size="sm" c="dimmed">KDV&apos;li Toplam (Nihai Satış)</Text>
+                <Text size="sm" fw={600}>{formatCurrency(summaryTotals.finalTotal, costCurrency)}</Text>
+              </SimpleGrid>
+            </Card>
+          </Tabs.Panel>
+        </Tabs>
       </Modal>
 
       <Modal
@@ -510,6 +1212,12 @@ export default function Proposals() {
             </Group>
 
             <SimpleGrid cols={2} spacing="xs" mb="md">
+              <Text size="sm" c="dimmed">Yapılacak İş</Text>
+              <Text size="sm">{detailProposal.work_summary || '-'}</Text>
+              <Text size="sm" c="dimmed">Taş Cinsi</Text>
+              <Text size="sm">{detailProposal.stone_summary || '-'}</Text>
+              <Text size="sm" c="dimmed">Teslimat</Text>
+              <Text size="sm">{detailDeliveryLabel || '-'}</Text>
               <Text size="sm" c="dimmed">Geçerlilik</Text>
               <Text size="sm">{detailProposal.valid_until || '-'}</Text>
               <Text size="sm" c="dimmed">Ara Toplam</Text>
@@ -577,18 +1285,28 @@ export default function Proposals() {
             <Table striped highlightOnHover>
               <thead>
                 <tr>
-                  <th>Ürün</th>
-                  <th>Ölçü</th>
-                  <th>Adet</th>
+                  <th>Yapılacak İş</th>
+                  <th>Taş Cinsi</th>
+                  <th>Ebat</th>
+                  <th>Toplam</th>
+                  <th>Miktar</th>
+                  <th>Fiyat</th>
                   <th>Tutar</th>
                 </tr>
               </thead>
               <tbody>
                 {(detailProposal.items || []).map((item) => (
                   <tr key={item.id}>
-                    <td>{item.product_name || item.description || '-'}</td>
-                    <td>{item.width}x{item.length}</td>
+                    <td>{item.description || '-'}</td>
+                    <td>{item.stone_type || '-'}</td>
+                    <td>{item.size_text || '-'}</td>
+                    <td>
+                      {item.total_measure ?? '-'} {item.total_unit
+                        ? UNIT_OPTIONS.find((opt) => opt.value === item.total_unit)?.label || item.total_unit
+                        : ''}
+                    </td>
                     <td>{item.quantity}</td>
+                    <td>{formatCurrency(item.unit_price, detailProposal.currency)}</td>
                     <td>{formatCurrency(item.total_price, detailProposal.currency)}</td>
                   </tr>
                 ))}

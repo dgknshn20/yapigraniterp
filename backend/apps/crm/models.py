@@ -1,9 +1,8 @@
-from django.db import models
+from django.db import models, transaction, IntegrityError
 from apps.core.models import TimeStampedModel
 from apps.finance.models import Currency
 
 from decimal import Decimal
-import uuid
 
 class Customer(TimeStampedModel):
     TYPE_CHOICES = (
@@ -23,6 +22,12 @@ class Customer(TimeStampedModel):
         ("VIP", "VIP"),
         ("RISKY", "Riskli"),
     )
+    STATUS_COLOR_CHOICES = (
+        ("BLACK", "Siyah"),
+        ("RED", "Kırmızı"),
+        ("YELLOW", "Sarı"),
+        ("GREEN", "Yeşil"),
+    )
 
     customer_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="INDIVIDUAL")
     name = models.CharField(max_length=200, verbose_name="Müşteri/Firma Adı")
@@ -36,6 +41,12 @@ class Customer(TimeStampedModel):
 
     risk_limit = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Risk Limiti")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="LEAD", verbose_name="Durum")
+    status_color = models.CharField(
+        max_length=10,
+        choices=STATUS_COLOR_CHOICES,
+        default="GREEN",
+        verbose_name="Statü",
+    )
     segment = models.CharField(max_length=20, choices=SEGMENT_CHOICES, default="STANDARD", verbose_name="Segment")
     internal_notes = models.TextField(blank=True, default="", verbose_name="Şirket İçi Notlar")
     owner = models.ForeignKey(
@@ -46,9 +57,29 @@ class Customer(TimeStampedModel):
         related_name="owned_customers",
         verbose_name="Müşteri Sorumlusu",
     )
+    customer_number = models.PositiveIntegerField(unique=True, editable=False)
 
     def __str__(self):
         return self.name
+
+    def _assign_customer_number(self):
+        if self.customer_number:
+            return
+        last = Customer.objects.select_for_update().order_by("-customer_number").first()
+        next_no = (last.customer_number if last and last.customer_number else 0) + 1
+        self.customer_number = next_no
+
+    def save(self, *args, **kwargs):
+        if self.customer_number:
+            return super().save(*args, **kwargs)
+        for _ in range(3):
+            try:
+                with transaction.atomic():
+                    self._assign_customer_number()
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                self.customer_number = None
+        return super().save(*args, **kwargs)
 
 
 class Appointment(TimeStampedModel):
@@ -75,10 +106,23 @@ class Proposal(TimeStampedModel):
         ("REJECTED", "Reddedildi"),
         ("CONVERTED", "Sözleşmeye Dönüştü"),
     )
+    DELIVERY_CHOICES = (
+        ("APPLICATION_INCLUDED", "Uygulama Dahil"),
+        ("FACTORY_DELIVERY", "Fabrika Teslim"),
+    )
 
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="proposals")
     proposal_number = models.CharField(max_length=50, unique=True, editable=False)
+    proposal_no = models.PositiveIntegerField(unique=True, editable=False)
     valid_until = models.DateField(null=True, blank=True, verbose_name="Geçerlilik Tarihi")
+    work_summary = models.CharField(max_length=200, blank=True, default="", verbose_name="Yapılacak İş (Özet)")
+    stone_summary = models.CharField(max_length=200, blank=True, default="", verbose_name="Taş Cinsi (Özet)")
+    delivery_type = models.CharField(
+        max_length=30,
+        choices=DELIVERY_CHOICES,
+        default="FACTORY_DELIVERY",
+        verbose_name="Teslimat Tipi",
+    )
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="DRAFT")
     currency = models.CharField(
@@ -98,10 +142,29 @@ class Proposal(TimeStampedModel):
         verbose_name="KDV Oranı (%)",
     )
 
+    def _assign_proposal_no(self):
+        if self.proposal_no:
+            return
+        last = Proposal.objects.select_for_update().order_by("-proposal_no").first()
+        next_no = (last.proposal_no if last and last.proposal_no else 0) + 1
+        self.proposal_no = next_no
+        if not self.proposal_number or not str(self.proposal_number).isdigit():
+            self.proposal_number = str(next_no)
+
     def save(self, *args, **kwargs):
-        if not self.proposal_number:
-            self.proposal_number = f"PR-{str(uuid.uuid4())[:8].upper()}"
-        super().save(*args, **kwargs)
+        if self.proposal_no:
+            if not self.proposal_number or not str(self.proposal_number).isdigit():
+                self.proposal_number = str(self.proposal_no)
+            return super().save(*args, **kwargs)
+        for _ in range(3):
+            try:
+                with transaction.atomic():
+                    self._assign_proposal_no()
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                self.proposal_no = None
+                self.proposal_number = ""
+        return super().save(*args, **kwargs)
 
     @property
     def subtotal_amount(self):
@@ -129,11 +192,34 @@ class Proposal(TimeStampedModel):
 
 
 class ProposalItem(models.Model):
+    UNIT_CHOICES = (
+        ("MTUL", "Mtül"),
+        ("M2", "m²"),
+        ("ADET", "Adet"),
+        ("TAKIM", "Takım"),
+    )
+
     proposal = models.ForeignKey(Proposal, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey("inventory.ProductDefinition", on_delete=models.PROTECT, null=True, blank=True)
     slab = models.ForeignKey("inventory.Slab", on_delete=models.SET_NULL, null=True, blank=True)
 
     description = models.CharField(max_length=200, blank=True, help_text="Örn: Mutfak Tezgahı")
+    stone_type = models.CharField(max_length=200, blank=True, default="", verbose_name="Taş Cinsi")
+    size_text = models.CharField(max_length=100, blank=True, default="", verbose_name="Ebat")
+    total_measure = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Toplam",
+    )
+    total_unit = models.CharField(
+        max_length=10,
+        choices=UNIT_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name="Birim",
+    )
 
     width = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     length = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -146,10 +232,14 @@ class ProposalItem(models.Model):
     total_price = models.DecimalField(max_digits=19, decimal_places=2, editable=False, default=0)
 
     def save(self, *args, **kwargs):
-        area_m2 = (self.width * self.length * Decimal(self.quantity)) / Decimal("10000")
-        waste_multiplier = Decimal("1") + (self.fire_rate / Decimal("100"))
-        material_cost = (area_m2 * self.unit_price * waste_multiplier)
-        self.total_price = (material_cost + self.labor_cost).quantize(Decimal("0.01"))
+        if self.total_measure is not None:
+            base = Decimal(self.total_measure or 0) * Decimal(self.quantity or 0) * Decimal(self.unit_price or 0)
+            self.total_price = base.quantize(Decimal("0.01"))
+        else:
+            area_m2 = (self.width * self.length * Decimal(self.quantity)) / Decimal("10000")
+            waste_multiplier = Decimal("1") + (self.fire_rate / Decimal("100"))
+            material_cost = (area_m2 * self.unit_price * waste_multiplier)
+            self.total_price = (material_cost + self.labor_cost).quantize(Decimal("0.01"))
         super().save(*args, **kwargs)
 
 

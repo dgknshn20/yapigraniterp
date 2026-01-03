@@ -7,3 +7,8 @@ export const listContracts = async () => {
   const response = await axios.get(getUrl('contracts'));
   return response.data;
 };
+
+export const updateContract = async (id, data) => {
+  const response = await axios.patch(getUrl('contracts') + `${id}/`, data);
+  return response.data;
+};

@@ -25,6 +25,9 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = "__all__"
+        extra_kwargs = {
+            "customer_number": {"read_only": True},
+        }
 
     def validate(self, data):
         phone = data.get("phone")
@@ -78,6 +81,9 @@ class CustomerDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = "__all__"
+        extra_kwargs = {
+            "customer_number": {"read_only": True},
+        }
 
     def _role(self):
         request = self.context.get("request")
@@ -239,6 +245,7 @@ class ProposalItemSerializer(serializers.ModelSerializer):
         fields = [
             "id", "proposal",
             "product", "product_name", "slab", "slab_barcode", "description",
+            "stone_type", "size_text", "total_measure", "total_unit",
             "width", "length", "quantity",
             "fire_rate", "unit_price", "labor_cost",
             "total_price", "area_m2"
@@ -262,6 +269,7 @@ class ProposalSerializer(serializers.ModelSerializer):
         fields = "__all__"
         extra_kwargs = {
             "proposal_number": {"read_only": True},
+            "proposal_no": {"read_only": True},
             "total_amount": {"read_only": True},
         }
 
@@ -279,4 +287,3 @@ class ProposalSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data = self._handle_description(validated_data)
         return super().update(instance, validated_data)
-

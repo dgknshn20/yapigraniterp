@@ -28,17 +28,16 @@ import {
 
 import { getCustomerDetail } from './customerService';
 
-const getStatusColor = (status) => {
-  const map = {
-    LEAD: 'gray',
-    NEGOTIATION: 'blue',
-    ACTIVE: 'green',
-    PAYMENT_DUE: 'orange',
-    PASSIVE: 'yellow',
-    BLACKLIST: 'red',
-  };
-  return map[status] || 'gray';
+const STATUS_COLOR_MAP = {
+  BLACK: 'dark',
+  RED: 'red',
+  YELLOW: 'yellow',
+  GREEN: 'green',
 };
+
+const getStatusColor = (statusColor) => (
+  STATUS_COLOR_MAP[statusColor] || 'gray'
+);
 
 const getInstallmentStatusColor = (status, isOverdue) => {
   if (isOverdue) return 'red';
@@ -105,7 +104,7 @@ export default function CustomerDetail() {
       <Card withBorder padding="lg" radius="md" mb="lg">
         <Group justify="space-between" mb="xs">
           <Group>
-            <ThemeIcon size="xl" radius="md" variant="light" color={getStatusColor(customer.status)}>
+            <ThemeIcon size="xl" radius="md" variant="light" color={getStatusColor(customer.status_color)}>
               <IconUser style={{ width: '70%', height: '70%' }} />
             </ThemeIcon>
             <div>
@@ -113,15 +112,15 @@ export default function CustomerDetail() {
               <Text size="sm" c="dimmed">
                 {customer.customer_type === 'COMPANY' ? 'Kurumsal Firma' : 'Bireysel Müşteri'}
               </Text>
+              <Text size="sm" c="dimmed">
+                Müşteri No: {customer.customer_number || '-'}
+              </Text>
             </div>
           </Group>
           <Group gap="xs">
             {customer.segment_display && (
               <Badge variant="light" color="blue">{customer.segment_display}</Badge>
             )}
-            <Badge size="lg" color={getStatusColor(customer.status)}>
-              {customer.status_display || customer.status}
-            </Badge>
           </Group>
         </Group>
 

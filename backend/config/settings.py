@@ -75,9 +75,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -205,6 +205,7 @@ CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOWED_ORIGINS = [
     "https://yapigraniterp.vercel.app",
+    "https://*.vercel.app",
 ]
 
 # preview domainler için (yapigraniterp-xxxxx.vercel.app)
@@ -214,14 +215,28 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 
 CORS_ALLOW_CREDENTIALS = True
 
+CORS_ALLOW_METHODS = [
+    "GET",
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE",
+    "OPTIONS",
+]
+
 CORS_ALLOW_HEADERS = [
     "accept",
-    "accept-encoding",
     "authorization",
     "content-type",
-    "dnt",
     "origin",
     "user-agent",
     "x-csrftoken",
     "x-requested-with",
 ]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://yapigraniterp.vercel.app",
+    "https://*.vercel.app",
+]
+
+APPEND_SLASH = True

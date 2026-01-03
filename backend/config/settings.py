@@ -22,22 +22,33 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-ze)@a)!ucsthnnuc1r09b__ot2-)ey^fqp#$$zjo^031q@xcpp')
+SECRET_KEY = os.getenv(
+    'DJANGO_SECRET_KEY',
+    os.getenv('SECRET_KEY', 'django-insecure-ze)@a)!ucsthnnuc1r09b__ot2-)ey^fqp#$$zjo^031q@xcpp')
+)
 
 def env_bool(name, default='False'):
     return os.getenv(name, default).lower() in ('1', 'true', 'yes', 'on')
 
-def env_list(name, default):
-    value = os.getenv(name)
-    if value is None:
-        return default
-    items = [item.strip() for item in value.split(',') if item.strip()]
-    return items or default
+def env_list(name, default, alt_names=None):
+    candidates = [name] + (alt_names or [])
+    for var in candidates:
+        value = os.getenv(var)
+        if value:
+            raw_items = value.split(',') if ',' in value else value.split()
+            items = [item.strip() for item in raw_items if item.strip()]
+            if items:
+                return items
+    return default
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool('DJANGO_DEBUG', os.getenv('DEBUG', 'False'))
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost 127.0.0.1").split()
+ALLOWED_HOSTS = env_list(
+    "DJANGO_ALLOWED_HOSTS",
+    ["localhost", "127.0.0.1"],
+    alt_names=["ALLOWED_HOSTS"],
+)
 
 
 # Application definition

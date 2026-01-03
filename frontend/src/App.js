@@ -65,8 +65,28 @@ export default function App() {
 
   // Get auth state from Redux
   const { user } = useSelector((state) => state.auth);
-  const activeUser = AUTH_DISABLED ? (user || FALLBACK_USER) : user;
+  const activeUser = AUTH_DISABLED
+    ? {
+      ...FALLBACK_USER,
+      ...(user || {}),
+      role: 'ADMIN',
+      username: user?.username || FALLBACK_USER.username,
+    }
+    : user;
   const [roleLoading, setRoleLoading] = useState(false);
+
+  useEffect(() => {
+    if (!AUTH_DISABLED) return;
+    if (!user || user.role !== 'ADMIN') {
+      const normalized = {
+        ...user,
+        ...FALLBACK_USER,
+        role: 'ADMIN',
+        username: user?.username || FALLBACK_USER.username,
+      };
+      dispatch(setUser(normalized));
+    }
+  }, [user, dispatch, AUTH_DISABLED, FALLBACK_USER]);
 
   useEffect(() => {
     const loadRole = async () => {

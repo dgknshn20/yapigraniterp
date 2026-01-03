@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import axios from 'axios';
 import {
@@ -32,27 +32,20 @@ import Proposals from './features/proposals/Proposals';
 import Contracts from './features/contracts/Contracts';
 import Finance from './features/finance/Finance';
 import Inventory from './features/inventory/Inventory';
-import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import NotificationsPage from './features/notifications/NotificationsPage';
 import notificationService from './features/notifications/notificationService';
 import Employees from './features/hr/Employees';
 import { setUser } from './features/auth/authSlice';
 
-const LOGIN_ENABLED = (process.env.REACT_APP_LOGIN_ENABLED || 'true').toLowerCase() !== 'false';
-
-const LoginPlaceholder = () => (
-  <div style={{ padding: 24 }}>
-    <Text fw={600}>Giriş ekranı geçici olarak kapalı.</Text>
-  </div>
-);
+const AUTH_DISABLED = true;
+const FALLBACK_USER = { username: 'Sistem', role: 'ADMIN' };
 
 /**
  * Protected Route Component
- * Redirects to login if user is not authenticated
+ * Auth is disabled; only role gate is enforced.
  */
-const ProtectedRoute = ({ children, isAuthenticated, allowedRoles, user }) => {
-  if (!isAuthenticated) return LOGIN_ENABLED ? <Login /> : <LoginPlaceholder />;
+const ProtectedRoute = ({ children, allowedRoles, user }) => {
   if (allowedRoles && !allowedRoles.includes(user?.role)) {
     return (
       <div style={{ padding: 24 }}>
@@ -72,11 +65,12 @@ export default function App() {
 
   // Get auth state from Redux
   const { user } = useSelector((state) => state.auth);
+  const activeUser = AUTH_DISABLED ? (user || FALLBACK_USER) : user;
   const [roleLoading, setRoleLoading] = useState(false);
 
   useEffect(() => {
     const loadRole = async () => {
-      if (!user || user.role || roleLoading) return;
+      if (!user || user.role || roleLoading || AUTH_DISABLED) return;
       setRoleLoading(true);
       try {
         const base = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
@@ -127,21 +121,17 @@ export default function App() {
     { label: 'Finans', icon: IconBuildingBank, to: '/finance', roles: ['ADMIN', 'FINANCE'] },
   ];
 
-  const visibleNavItems = navItems.filter((item) => !item.roles || item.roles.includes(user?.role));
+  const visibleNavItems = navItems.filter((item) => !item.roles || item.roles.includes(activeUser?.role));
 
   /**
    * Handle Logout
    */
   const handleLogout = () => {
     dispatch(logout());
-    navigate('/login');
+    navigate('/');
   };
 
-  // If user is not authenticated, show login page
-  if (!user) {
-    return LOGIN_ENABLED ? <Login /> : <LoginPlaceholder />;
-  }
-  if (!user.role && roleLoading) {
+  if (!AUTH_DISABLED && !user.role && roleLoading) {
     return (
       <div style={{ padding: 24 }}>
         <Loader size="sm" />
@@ -176,7 +166,7 @@ export default function App() {
             </Group>
           </div>
 
-          {user && (
+          {activeUser && (
             <Group gap="xs">
               <Menu shadow="md" width={360}>
                 <Menu.Target>
@@ -222,7 +212,7 @@ export default function App() {
                 <Menu.Target>
                   <Group style={{ cursor: 'pointer' }}>
                     <Avatar radius="xl" color="blue">
-                      {user.username ? user.username.substring(0, 2).toUpperCase() : 'U'}
+                      {activeUser.username ? activeUser.username.substring(0, 2).toUpperCase() : 'U'}
                     </Avatar>
                     <div style={{ display: 'none' }} className="app-user-meta" />
                   </Group>
@@ -270,16 +260,16 @@ export default function App() {
 
       <AppShell.Main>
         <Routes>
-          <Route path="/login" element={LOGIN_ENABLED ? <Login /> : <LoginPlaceholder />} />
-          <Route path="/" element={<ProtectedRoute isAuthenticated={!!user} user={user}><Dashboard /></ProtectedRoute>} />
-          <Route path="/customers" element={<ProtectedRoute isAuthenticated={!!user} user={user} allowedRoles={['ADMIN', 'SALES']}><Customers /></ProtectedRoute>} />
-          <Route path="/customers/:id" element={<ProtectedRoute isAuthenticated={!!user} user={user} allowedRoles={['ADMIN', 'SALES']}><CustomerDetail /></ProtectedRoute>} />
-          <Route path="/proposals" element={<ProtectedRoute isAuthenticated={!!user} user={user} allowedRoles={['ADMIN', 'SALES']}><Proposals /></ProtectedRoute>} />
-          <Route path="/contracts" element={<ProtectedRoute isAuthenticated={!!user} user={user} allowedRoles={['ADMIN', 'SALES', 'FINANCE', 'PRODUCTION']}><Contracts /></ProtectedRoute>} />
-          <Route path="/inventory" element={<ProtectedRoute isAuthenticated={!!user} user={user} allowedRoles={['ADMIN', 'PRODUCTION']}><Inventory /></ProtectedRoute>} />
-          <Route path="/finance" element={<ProtectedRoute isAuthenticated={!!user} user={user} allowedRoles={['ADMIN', 'FINANCE']}><Finance /></ProtectedRoute>} />
-          <Route path="/employees" element={<ProtectedRoute isAuthenticated={!!user} user={user} allowedRoles={['ADMIN']}><Employees /></ProtectedRoute>} />
-          <Route path="/notifications" element={<ProtectedRoute isAuthenticated={!!user} user={user}><NotificationsPage /></ProtectedRoute>} />
+          <Route path="/login" element={<Navigate to="/" replace />} />
+          <Route path="/" element={<ProtectedRoute user={activeUser}><Dashboard /></ProtectedRoute>} />
+          <Route path="/customers" element={<ProtectedRoute user={activeUser} allowedRoles={['ADMIN', 'SALES']}><Customers /></ProtectedRoute>} />
+          <Route path="/customers/:id" element={<ProtectedRoute user={activeUser} allowedRoles={['ADMIN', 'SALES']}><CustomerDetail /></ProtectedRoute>} />
+          <Route path="/proposals" element={<ProtectedRoute user={activeUser} allowedRoles={['ADMIN', 'SALES']}><Proposals /></ProtectedRoute>} />
+          <Route path="/contracts" element={<ProtectedRoute user={activeUser} allowedRoles={['ADMIN', 'SALES', 'FINANCE', 'PRODUCTION']}><Contracts /></ProtectedRoute>} />
+          <Route path="/inventory" element={<ProtectedRoute user={activeUser} allowedRoles={['ADMIN', 'PRODUCTION']}><Inventory /></ProtectedRoute>} />
+          <Route path="/finance" element={<ProtectedRoute user={activeUser} allowedRoles={['ADMIN', 'FINANCE']}><Finance /></ProtectedRoute>} />
+          <Route path="/employees" element={<ProtectedRoute user={activeUser} allowedRoles={['ADMIN']}><Employees /></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute user={activeUser}><NotificationsPage /></ProtectedRoute>} />
         </Routes>
       </AppShell.Main>
     </AppShell>

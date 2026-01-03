@@ -65,7 +65,7 @@ axios.interceptors.response.use(
       } catch (refreshError) {
         // Refresh failed, clear user
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        window.location.href = '/';
         return Promise.reject(refreshError);
       }
     }
